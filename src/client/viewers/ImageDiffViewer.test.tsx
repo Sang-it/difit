@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import type { DiffFile } from '../../types/diff';
@@ -89,6 +89,48 @@ describe('ImageDiffViewer', () => {
       expect(images).toHaveLength(2);
     });
 
+    it('shows image compare controls for modified images', () => {
+      const modifiedFile: DiffFile = {
+        path: 'test.jpg',
+        oldPath: 'test.jpg',
+        status: 'modified',
+        additions: 1,
+        deletions: 1,
+        chunks: [],
+      };
+
+      renderViewer(modifiedFile);
+
+      expect(screen.getByRole('button', { name: '2-up' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Stacked' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Swipe' })).toBeInTheDocument();
+    });
+
+    it('does not show image compare controls for added or deleted images', () => {
+      const addedFile: DiffFile = {
+        path: 'test.jpg',
+        status: 'added',
+        additions: 1,
+        deletions: 0,
+        chunks: [],
+      };
+      const { rerender } = render(<ImageDiffViewer {...baseProps} file={addedFile} />);
+
+      expect(screen.queryByRole('button', { name: 'Swipe' })).not.toBeInTheDocument();
+
+      const deletedFile: DiffFile = {
+        path: 'test.jpg',
+        oldPath: 'test.jpg',
+        status: 'deleted',
+        additions: 0,
+        deletions: 1,
+        chunks: [],
+      };
+      rerender(<ImageDiffViewer {...baseProps} file={deletedFile} />);
+
+      expect(screen.queryByRole('button', { name: 'Swipe' })).not.toBeInTheDocument();
+    });
+
     it('handles renamed image correctly', () => {
       const renamedFile: DiffFile = {
         path: 'new-name.jpg',
@@ -106,6 +148,71 @@ describe('ImageDiffViewer', () => {
       const images = screen.getAllByRole('img');
       expect(images[0]).toHaveAttribute('src', '/api/blob/old-name.jpg?ref=HEAD~1');
       expect(images[1]).toHaveAttribute('src', '/api/blob/new-name.jpg?ref=HEAD');
+    });
+  });
+
+  describe('Swipe image comparison', () => {
+    it('renders a swipe comparison frame with both image versions', () => {
+      const file: DiffFile = {
+        path: 'test.jpg',
+        oldPath: 'test.jpg',
+        status: 'modified',
+        additions: 1,
+        deletions: 1,
+        chunks: [],
+      };
+
+      renderViewer(file);
+      fireEvent.click(screen.getByRole('button', { name: 'Swipe' }));
+
+      expect(screen.getByTestId('image-swipe-comparison')).toBeInTheDocument();
+      expect(screen.getByLabelText('Swipe reveal amount')).toHaveValue('50');
+
+      const images = screen.getAllByRole('img');
+      expect(images).toHaveLength(2);
+      expect(images[0]).toHaveAttribute('src', '/api/blob/test.jpg?ref=HEAD~1');
+      expect(images[1]).toHaveAttribute('src', '/api/blob/test.jpg?ref=HEAD');
+    });
+
+    it('updates the clipped overlay when the swipe slider changes', () => {
+      const file: DiffFile = {
+        path: 'test.jpg',
+        oldPath: 'test.jpg',
+        status: 'modified',
+        additions: 1,
+        deletions: 1,
+        chunks: [],
+      };
+
+      renderViewer(file);
+      fireEvent.click(screen.getByRole('button', { name: 'Swipe' }));
+
+      fireEvent.change(screen.getByLabelText('Swipe reveal amount'), {
+        target: { value: '70' },
+      });
+
+      expect(screen.getByTestId('image-swipe-overlay')).toHaveAttribute(
+        'style',
+        expect.stringContaining('clip-path: inset(0 30% 0 0)'),
+      );
+    });
+
+    it('supports SVG files through the same image swipe view', () => {
+      const file: DiffFile = {
+        path: 'vector.svg',
+        oldPath: 'vector.svg',
+        status: 'modified',
+        additions: 1,
+        deletions: 1,
+        chunks: [],
+      };
+
+      renderViewer(file, { baseCommitish: 'main', targetCommitish: 'feature' });
+      fireEvent.click(screen.getByRole('button', { name: 'Swipe' }));
+
+      const images = screen.getAllByRole('img');
+      expect(images[0]).toHaveAttribute('src', '/api/blob/vector.svg?ref=main');
+      expect(images[1]).toHaveAttribute('src', '/api/blob/vector.svg?ref=feature');
     });
   });
 

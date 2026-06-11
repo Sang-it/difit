@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { Columns2, MoveHorizontal, Rows2 } from 'lucide-react';
+import { useEffect, useState, type CSSProperties } from 'react';
 
 import { DEFAULT_DIFF_VIEW_MODE } from '../../utils/diffMode';
 
@@ -9,6 +10,16 @@ interface ImageInfo {
   height?: number;
   size?: number;
 }
+
+type ImageCompareMode = '2-up' | 'stacked' | 'swipe';
+
+type ImageVersion = {
+  label: string;
+  src: string;
+  alt: string;
+  info: ImageInfo;
+  onImageInfo: (info: ImageInfo) => void;
+};
 
 interface StaticBlobWindow {
   __DIFIT_STATIC_BLOB_URLS__?: Record<string, string>;
@@ -21,6 +32,252 @@ const imageBlobUrl = (path: string, ref: string): string => {
   return staticBlobUrls?.[blobKey(ref, path)] ?? `/api/blob/${path}?ref=${ref}`;
 };
 
+const checkerboardStyle: CSSProperties = {
+  backgroundImage: `
+      linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%),
+      linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%)
+    `,
+  backgroundSize: '20px 20px',
+  backgroundPosition: '0 0, 10px 10px',
+  backgroundColor: 'white',
+};
+
+const formatFileSize = (bytes?: number): string => {
+  if (!bytes) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const formatDimensions = (info: ImageInfo): string => {
+  if (!info.width || !info.height) return '';
+  return `W: ${info.width}px | H: ${info.height}px`;
+};
+
+const formatImageInfo = (info: ImageInfo): string => {
+  const dimensions = formatDimensions(info);
+  const size = formatFileSize(info.size);
+  if (dimensions && size) return `${dimensions} | ${size}`;
+  return dimensions || size;
+};
+
+const handleImageLoad = async (img: HTMLImageElement, setImageInfo: (info: ImageInfo) => void) => {
+  try {
+    const width = img.naturalWidth;
+    const height = img.naturalHeight;
+
+    const response = await fetch(img.src);
+    const blob = await response.blob();
+    const size = blob.size;
+
+    setImageInfo({ width, height, size });
+  } catch (error) {
+    console.error('Failed to get image info:', error);
+  }
+};
+
+const getDefaultCompareMode = (diffMode: DiffViewerBodyProps['diffMode']): ImageCompareMode =>
+  diffMode === 'split' ? '2-up' : 'stacked';
+
+const getSwipeAspectRatio = (oldImageInfo: ImageInfo, newImageInfo: ImageInfo): string => {
+  const width = newImageInfo.width ?? oldImageInfo.width;
+  const height = newImageInfo.height ?? oldImageInfo.height;
+
+  if (width && height) {
+    return `${width} / ${height}`;
+  }
+
+  return '16 / 9';
+};
+
+type ImageCardProps = {
+  image: ImageVersion;
+  className?: string;
+};
+
+const ImageCard = ({ image, className = '' }: ImageCardProps) => {
+  const [hasError, setHasError] = useState(false);
+  const imageInfo = formatImageInfo(image.info);
+
+  return (
+    <div
+      className={`border border-github-border rounded-md p-4 bg-github-bg-secondary ${className}`}
+    >
+      <div className="text-github-text-muted mb-2" style={{ fontSize: '14px' }}>
+        {image.label}
+      </div>
+      {!hasError && (
+        <img
+          src={image.src}
+          alt={image.alt}
+          className="max-w-full max-h-96 border border-github-border rounded mx-auto"
+          style={checkerboardStyle}
+          onLoad={(e) => void handleImageLoad(e.currentTarget, image.onImageInfo)}
+          onError={() => setHasError(true)}
+        />
+      )}
+      {hasError && (
+        <div className="text-github-text-muted text-sm mt-2">Image could not be loaded</div>
+      )}
+      {imageInfo && (
+        <div className="text-github-text-muted mt-2" style={{ fontSize: '14px' }}>
+          {imageInfo}
+        </div>
+      )}
+    </div>
+  );
+};
+
+type ImageCompareModeControlProps = {
+  mode: ImageCompareMode;
+  onModeChange: (mode: ImageCompareMode) => void;
+};
+
+const imageCompareModeOptions = [
+  { mode: '2-up', label: '2-up', title: 'Two-up image comparison', Icon: Columns2 },
+  { mode: 'stacked', label: 'Stacked', title: 'Stacked image comparison', Icon: Rows2 },
+  { mode: 'swipe', label: 'Swipe', title: 'Swipe image comparison', Icon: MoveHorizontal },
+] as const;
+
+const ImageCompareModeControl = ({ mode, onModeChange }: ImageCompareModeControlProps) => (
+  <div className="flex bg-github-bg-tertiary border border-github-border rounded-md p-1">
+    {imageCompareModeOptions.map(({ mode: optionMode, label, title, Icon }) => (
+      <button
+        key={optionMode}
+        type="button"
+        onClick={() => onModeChange(optionMode)}
+        className={`px-3 py-1.5 text-xs font-medium rounded transition-all duration-200 flex items-center gap-1.5 cursor-pointer ${
+          mode === optionMode
+            ? 'bg-github-bg-primary text-github-text-primary shadow-sm'
+            : 'text-github-text-secondary hover:text-github-text-primary'
+        }`}
+        title={title}
+      >
+        <Icon size={14} />
+        {label}
+      </button>
+    ))}
+  </div>
+);
+
+type ImagePairProps = {
+  previous: ImageVersion;
+  current: ImageVersion;
+};
+
+const TwoUpImageCompare = ({ previous, current }: ImagePairProps) => (
+  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <div className="text-center">
+      <ImageCard image={previous} />
+    </div>
+    <div className="text-center">
+      <ImageCard image={current} />
+    </div>
+  </div>
+);
+
+const StackedImageCompare = ({ previous, current }: ImagePairProps) => (
+  <div className="space-y-6">
+    <div className="text-center">
+      <ImageCard image={previous} className="inline-block" />
+    </div>
+    <div className="text-center">
+      <ImageCard image={current} className="inline-block" />
+    </div>
+  </div>
+);
+
+const SwipeImageCompare = ({ previous, current }: ImagePairProps) => {
+  const [swipePosition, setSwipePosition] = useState(50);
+  const [previousHasError, setPreviousHasError] = useState(false);
+  const [currentHasError, setCurrentHasError] = useState(false);
+  const aspectRatio = getSwipeAspectRatio(previous.info, current.info);
+  const previousInfo = formatImageInfo(previous.info);
+  const currentInfo = formatImageInfo(current.info);
+
+  return (
+    <div className="border border-github-border rounded-md p-4 bg-github-bg-secondary">
+      <div
+        className="relative mx-auto w-full max-w-4xl overflow-hidden rounded border border-github-border"
+        data-testid="image-swipe-comparison"
+        style={{ ...checkerboardStyle, aspectRatio }}
+      >
+        {!previousHasError && (
+          <img
+            src={previous.src}
+            alt={previous.alt}
+            className="absolute inset-0 h-full w-full object-contain"
+            onLoad={(e) => void handleImageLoad(e.currentTarget, previous.onImageInfo)}
+            onError={() => setPreviousHasError(true)}
+          />
+        )}
+        {!currentHasError && (
+          <div
+            className="absolute inset-0 overflow-hidden"
+            data-testid="image-swipe-overlay"
+            style={{ clipPath: `inset(0 ${100 - swipePosition}% 0 0)` }}
+          >
+            <img
+              src={current.src}
+              alt={current.alt}
+              className="absolute inset-0 h-full w-full object-contain"
+              onLoad={(e) => void handleImageLoad(e.currentTarget, current.onImageInfo)}
+              onError={() => setCurrentHasError(true)}
+            />
+          </div>
+        )}
+        <div className="absolute left-3 top-3 rounded border border-github-border bg-github-bg-primary/90 px-2 py-1 text-xs font-medium text-github-text-secondary">
+          Previous
+        </div>
+        <div className="absolute right-3 top-3 rounded border border-github-border bg-github-bg-primary/90 px-2 py-1 text-xs font-medium text-github-text-secondary">
+          Current
+        </div>
+        <div
+          className="absolute top-0 bottom-0 w-0.5 bg-github-text-primary shadow-[0_0_0_1px_rgba(0,0,0,0.45)]"
+          style={{ left: `${swipePosition}%` }}
+        >
+          <div className="absolute left-1/2 top-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-github-border bg-github-bg-primary text-github-text-primary shadow">
+            <MoveHorizontal size={18} />
+          </div>
+        </div>
+        <input
+          type="range"
+          min="0"
+          max="100"
+          value={swipePosition}
+          aria-label="Swipe reveal amount"
+          className="absolute inset-0 h-full w-full cursor-ew-resize opacity-0"
+          onChange={(event) => setSwipePosition(Number(event.target.value))}
+        />
+      </div>
+      {(previousHasError || currentHasError) && (
+        <div className="text-github-text-muted text-sm mt-2">Image could not be loaded</div>
+      )}
+      {(previousInfo || currentInfo) && (
+        <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1 text-sm text-github-text-muted">
+          {previousInfo && <span>Previous: {previousInfo}</span>}
+          {currentInfo && <span>Current: {currentInfo}</span>}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const renderImageCompare = (
+  compareMode: ImageCompareMode,
+  previous: ImageVersion,
+  current: ImageVersion,
+) => {
+  switch (compareMode) {
+    case '2-up':
+      return <TwoUpImageCompare previous={previous} current={current} />;
+    case 'swipe':
+      return <SwipeImageCompare previous={previous} current={current} />;
+    case 'stacked':
+      return <StackedImageCompare previous={previous} current={current} />;
+  }
+};
+
 export function ImageDiffViewer({
   file,
   diffMode,
@@ -28,290 +285,89 @@ export function ImageDiffViewer({
   targetCommitish,
 }: DiffViewerBodyProps) {
   const mode = diffMode ?? DEFAULT_DIFF_VIEW_MODE;
+  const [compareMode, setCompareMode] = useState<ImageCompareMode>(() =>
+    getDefaultCompareMode(mode),
+  );
   const isDeleted = file.status === 'deleted';
   const isAdded = file.status === 'added';
   const isModified = file.status === 'modified' || file.status === 'renamed';
 
-  // Determine the actual refs to use
   const baseRef = baseCommitish || 'HEAD~1';
   const targetRef = targetCommitish || 'HEAD';
-
-  // State for image information
   const [oldImageInfo, setOldImageInfo] = useState<ImageInfo>({});
   const [newImageInfo, setNewImageInfo] = useState<ImageInfo>({});
 
-  // Function to handle image load and get dimensions/file size
-  const handleImageLoad = async (
-    img: HTMLImageElement,
-    setImageInfo: (info: ImageInfo) => void,
-  ) => {
-    try {
-      // Get image dimensions
-      const width = img.naturalWidth;
-      const height = img.naturalHeight;
+  useEffect(() => {
+    setCompareMode(getDefaultCompareMode(mode));
+  }, [mode]);
 
-      // Fetch the image to get file size
-      const response = await fetch(img.src);
-      const blob = await response.blob();
-      const size = blob.size;
-
-      setImageInfo({ width, height, size });
-    } catch (error) {
-      console.error('Failed to get image info:', error);
-    }
-  };
-
-  // Function to format file size
-  const formatFileSize = (bytes?: number): string => {
-    if (!bytes) return '';
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
-  // Function to format image dimensions
-  const formatDimensions = (info: ImageInfo): string => {
-    if (!info.width || !info.height) return '';
-    return `W: ${info.width}px | H: ${info.height}px`;
-  };
-
-  // Checkerboard background style for transparent images
-  const checkerboardStyle = {
-    backgroundImage: `
-      linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%),
-      linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%)
-    `,
-    backgroundSize: '20px 20px',
-    backgroundPosition: '0 0, 10px 10px',
-    backgroundColor: 'white',
-  };
-
-  // For deleted files, show only the old version
   if (isDeleted) {
+    const previousImage = {
+      label: 'Previous version:',
+      src: imageBlobUrl(file.oldPath || file.path, baseRef),
+      alt: `Previous version of ${file.oldPath || file.path}`,
+      info: oldImageInfo,
+      onImageInfo: setOldImageInfo,
+    };
+
     return (
       <div className="bg-github-bg-primary p-4">
         <div className="text-center">
           <div className="mb-2">
             <span className="text-github-danger font-medium">Deleted Image</span>
           </div>
-          <div className="inline-block border border-github-border rounded-md p-4 bg-github-bg-secondary">
-            <div className="text-github-text-muted mb-2" style={{ fontSize: '14px' }}>
-              Previous version:
-            </div>
-            <img
-              src={imageBlobUrl(file.oldPath || file.path, baseRef)}
-              alt={`Previous version of ${file.oldPath || file.path}`}
-              className="max-w-full max-h-96 border border-github-border rounded mx-auto"
-              style={checkerboardStyle}
-              onLoad={(e) => handleImageLoad(e.currentTarget, setOldImageInfo)}
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.style.display = 'none';
-                target.nextElementSibling?.classList.remove('hidden');
-              }}
-            />
-            <div className="hidden text-github-text-muted text-sm mt-2">
-              Image could not be loaded
-            </div>
-            {(oldImageInfo.width || oldImageInfo.size) && (
-              <div className="text-github-text-muted mt-2" style={{ fontSize: '14px' }}>
-                {formatDimensions(oldImageInfo)}
-                {formatDimensions(oldImageInfo) && formatFileSize(oldImageInfo.size) && ' | '}
-                {formatFileSize(oldImageInfo.size)}
-              </div>
-            )}
-          </div>
+          <ImageCard image={previousImage} className="inline-block" />
         </div>
       </div>
     );
   }
 
-  // For added files, show only the new version
   if (isAdded) {
+    const newImage = {
+      label: 'New file:',
+      src: imageBlobUrl(file.path, targetRef),
+      alt: `New image ${file.path}`,
+      info: newImageInfo,
+      onImageInfo: setNewImageInfo,
+    };
+
     return (
       <div className="bg-github-bg-primary p-4">
         <div className="text-center">
           <div className="mb-2">
             <span className="text-github-accent font-medium">Added Image</span>
           </div>
-          <div className="inline-block border border-github-border rounded-md p-4 bg-github-bg-secondary">
-            <div className="text-github-text-muted mb-2" style={{ fontSize: '14px' }}>
-              New file:
-            </div>
-            <img
-              src={imageBlobUrl(file.path, targetRef)}
-              alt={`New image ${file.path}`}
-              className="max-w-full max-h-96 border border-github-border rounded mx-auto"
-              style={checkerboardStyle}
-              onLoad={(e) => handleImageLoad(e.currentTarget, setNewImageInfo)}
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.style.display = 'none';
-                target.nextElementSibling?.classList.remove('hidden');
-              }}
-            />
-            <div className="hidden text-github-text-muted text-sm mt-2">
-              Image could not be loaded
-            </div>
-            {(newImageInfo.width || newImageInfo.size) && (
-              <div className="text-github-text-muted mt-2" style={{ fontSize: '14px' }}>
-                {formatDimensions(newImageInfo)}
-                {formatDimensions(newImageInfo) && formatFileSize(newImageInfo.size) && ' | '}
-                {formatFileSize(newImageInfo.size)}
-              </div>
-            )}
-          </div>
+          <ImageCard image={newImage} className="inline-block" />
         </div>
       </div>
     );
   }
 
-  // For modified/renamed files, show both versions
   if (isModified) {
-    if (mode === 'split') {
-      return (
-        <div className="bg-github-bg-primary p-4">
-          <div className="text-center mb-4">
-            <span className="text-github-text-primary font-medium">Modified Image</span>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            {/* Old version */}
-            <div className="text-center">
-              <div className="border border-github-border rounded-md p-4 bg-github-bg-secondary">
-                <div className="text-github-text-muted mb-2" style={{ fontSize: '14px' }}>
-                  Previous version:
-                </div>
-                <img
-                  src={imageBlobUrl(file.oldPath || file.path, baseRef)}
-                  alt={`Previous version of ${file.oldPath || file.path}`}
-                  className="max-w-full max-h-96 border border-github-border rounded mx-auto"
-                  style={checkerboardStyle}
-                  onLoad={(e) => handleImageLoad(e.currentTarget, setOldImageInfo)}
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                    target.nextElementSibling?.classList.remove('hidden');
-                  }}
-                />
-                <div className="hidden text-github-text-muted text-sm mt-2">
-                  Image could not be loaded
-                </div>
-                {(oldImageInfo.width || oldImageInfo.size) && (
-                  <div className="text-github-text-muted mt-2" style={{ fontSize: '14px' }}>
-                    {formatDimensions(oldImageInfo)}
-                    {formatDimensions(oldImageInfo) && formatFileSize(oldImageInfo.size) && ' | '}
-                    {formatFileSize(oldImageInfo.size)}
-                  </div>
-                )}
-              </div>
-            </div>
+    const previousImage = {
+      label: 'Previous version:',
+      src: imageBlobUrl(file.oldPath || file.path, baseRef),
+      alt: `Previous version of ${file.oldPath || file.path}`,
+      info: oldImageInfo,
+      onImageInfo: setOldImageInfo,
+    };
+    const currentImage = {
+      label: 'Current version:',
+      src: imageBlobUrl(file.path, targetRef),
+      alt: `Current version of ${file.path}`,
+      info: newImageInfo,
+      onImageInfo: setNewImageInfo,
+    };
 
-            {/* New version */}
-            <div className="text-center">
-              <div className="border border-github-border rounded-md p-4 bg-github-bg-secondary">
-                <div className="text-github-text-muted mb-2" style={{ fontSize: '14px' }}>
-                  Current version:
-                </div>
-                <img
-                  src={imageBlobUrl(file.path, targetRef)}
-                  alt={`Current version of ${file.path}`}
-                  className="max-w-full max-h-96 border border-github-border rounded mx-auto"
-                  style={checkerboardStyle}
-                  onLoad={(e) => handleImageLoad(e.currentTarget, setNewImageInfo)}
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                    target.nextElementSibling?.classList.remove('hidden');
-                  }}
-                />
-                <div className="hidden text-github-text-muted text-sm mt-2">
-                  Image could not be loaded
-                </div>
-                {(newImageInfo.width || newImageInfo.size) && (
-                  <div className="text-github-text-muted mt-2" style={{ fontSize: '14px' }}>
-                    {formatDimensions(newImageInfo)}
-                    {formatDimensions(newImageInfo) && formatFileSize(newImageInfo.size) && ' | '}
-                    {formatFileSize(newImageInfo.size)}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+    return (
+      <div className="bg-github-bg-primary p-4">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <span className="text-github-text-primary font-medium">Modified Image</span>
+          <ImageCompareModeControl mode={compareMode} onModeChange={setCompareMode} />
         </div>
-      );
-    } else {
-      // Unified mode: stack vertically
-      return (
-        <div className="bg-github-bg-primary p-4">
-          <div className="text-center mb-4">
-            <span className="text-github-text-primary font-medium">Modified Image</span>
-          </div>
-          <div className="space-y-6">
-            {/* Old version */}
-            <div className="text-center">
-              <div className="border border-github-border rounded-md p-4 bg-github-bg-secondary inline-block">
-                <div className="text-github-text-muted mb-2" style={{ fontSize: '14px' }}>
-                  Previous version:
-                </div>
-                <img
-                  src={imageBlobUrl(file.oldPath || file.path, baseRef)}
-                  alt={`Previous version of ${file.oldPath || file.path}`}
-                  className="max-w-full max-h-96 border border-github-border rounded mx-auto"
-                  style={checkerboardStyle}
-                  onLoad={(e) => handleImageLoad(e.currentTarget, setOldImageInfo)}
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                    target.nextElementSibling?.classList.remove('hidden');
-                  }}
-                />
-                <div className="hidden text-github-text-muted text-sm mt-2">
-                  Image could not be loaded
-                </div>
-                {(oldImageInfo.width || oldImageInfo.size) && (
-                  <div className="text-github-text-muted mt-2" style={{ fontSize: '14px' }}>
-                    {formatDimensions(oldImageInfo)}
-                    {formatDimensions(oldImageInfo) && formatFileSize(oldImageInfo.size) && ' | '}
-                    {formatFileSize(oldImageInfo.size)}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* New version */}
-            <div className="text-center">
-              <div className="border border-github-border rounded-md p-4 bg-github-bg-secondary inline-block">
-                <div className="text-github-text-muted mb-2" style={{ fontSize: '14px' }}>
-                  Current version:
-                </div>
-                <img
-                  src={imageBlobUrl(file.path, targetRef)}
-                  alt={`Current version of ${file.path}`}
-                  className="max-w-full max-h-96 border border-github-border rounded mx-auto"
-                  style={checkerboardStyle}
-                  onLoad={(e) => handleImageLoad(e.currentTarget, setNewImageInfo)}
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                    target.nextElementSibling?.classList.remove('hidden');
-                  }}
-                />
-                <div className="hidden text-github-text-muted text-sm mt-2">
-                  Image could not be loaded
-                </div>
-                {(newImageInfo.width || newImageInfo.size) && (
-                  <div className="text-github-text-muted mt-2" style={{ fontSize: '14px' }}>
-                    {formatDimensions(newImageInfo)}
-                    {formatDimensions(newImageInfo) && formatFileSize(newImageInfo.size) && ' | '}
-                    {formatFileSize(newImageInfo.size)}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
+        {renderImageCompare(compareMode, previousImage, currentImage)}
+      </div>
+    );
   }
 
   return null;

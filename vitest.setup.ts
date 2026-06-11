@@ -21,6 +21,46 @@ Object.defineProperty(window, 'getComputedStyle', {
   }),
 });
 
+const createMemoryStorage = (): Storage => {
+  const store = new Map<string, string>();
+
+  return {
+    get length() {
+      return store.size;
+    },
+    clear() {
+      store.clear();
+    },
+    getItem(key: string) {
+      return store.get(String(key)) ?? null;
+    },
+    key(index: number) {
+      return Array.from(store.keys())[index] ?? null;
+    },
+    removeItem(key: string) {
+      store.delete(String(key));
+    },
+    setItem(key: string, value: string) {
+      store.set(String(key), String(value));
+    },
+  };
+};
+
+const installMemoryStorage = (name: 'localStorage' | 'sessionStorage') => {
+  const storage = createMemoryStorage();
+  Object.defineProperty(window, name, {
+    configurable: true,
+    value: storage,
+  });
+  Object.defineProperty(globalThis, name, {
+    configurable: true,
+    value: storage,
+  });
+};
+
+installMemoryStorage('localStorage');
+installMemoryStorage('sessionStorage');
+
 // Global test utilities
 export const mockFetch = (response: any, revisionsResponse?: any) => {
   (global.fetch as any).mockImplementation((url: string) => {
