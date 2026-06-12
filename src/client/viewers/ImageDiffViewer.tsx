@@ -188,7 +188,7 @@ const StackedImageCompare = ({ previous, current }: ImagePairProps) => (
 );
 
 const SwipeImageCompare = ({ previous, current }: ImagePairProps) => {
-  const [swipePosition, setSwipePosition] = useState(50);
+  const [swipePosition, setSwipePosition] = useState(0);
   const [previousHasError, setPreviousHasError] = useState(false);
   const [currentHasError, setCurrentHasError] = useState(false);
   const aspectRatio = getSwipeAspectRatio(previous.info, current.info);
@@ -198,42 +198,45 @@ const SwipeImageCompare = ({ previous, current }: ImagePairProps) => {
   return (
     <div className="border border-github-border rounded-md p-4 bg-github-bg-secondary">
       <div
-        className="relative mx-auto w-full max-w-4xl overflow-hidden rounded border border-github-border"
+        className="relative mx-auto w-full max-w-4xl overflow-hidden rounded"
         data-testid="image-swipe-comparison"
         style={{ ...checkerboardStyle, aspectRatio }}
       >
-        {!previousHasError && (
+        {!currentHasError && (
           <img
-            src={previous.src}
-            alt={previous.alt}
+            src={current.src}
+            alt={current.alt}
             className="absolute inset-0 h-full w-full object-contain"
-            onLoad={(e) => void handleImageLoad(e.currentTarget, previous.onImageInfo)}
-            onError={() => setPreviousHasError(true)}
+            onLoad={(e) => void handleImageLoad(e.currentTarget, current.onImageInfo)}
+            onError={() => setCurrentHasError(true)}
           />
         )}
-        {!currentHasError && (
+        <div
+          className="pointer-events-none absolute inset-0 border-y-2 border-github-accent"
+          data-testid="image-swipe-current-border"
+        />
+        {!previousHasError && (
           <div
             className="absolute inset-0 overflow-hidden"
             data-testid="image-swipe-overlay"
             style={{ clipPath: `inset(0 ${100 - swipePosition}% 0 0)` }}
           >
             <img
-              src={current.src}
-              alt={current.alt}
+              src={previous.src}
+              alt={previous.alt}
               className="absolute inset-0 h-full w-full object-contain"
-              onLoad={(e) => void handleImageLoad(e.currentTarget, current.onImageInfo)}
-              onError={() => setCurrentHasError(true)}
+              onLoad={(e) => void handleImageLoad(e.currentTarget, previous.onImageInfo)}
+              onError={() => setPreviousHasError(true)}
+            />
+            <div
+              className="pointer-events-none absolute inset-0 border-y-2 border-github-danger"
+              data-testid="image-swipe-previous-border"
             />
           </div>
         )}
-        <div className="absolute left-3 top-3 rounded border border-github-border bg-github-bg-primary/90 px-2 py-1 text-xs font-medium text-github-text-secondary">
-          Previous
-        </div>
-        <div className="absolute right-3 top-3 rounded border border-github-border bg-github-bg-primary/90 px-2 py-1 text-xs font-medium text-github-text-secondary">
-          Current
-        </div>
         <div
-          className="absolute top-0 bottom-0 w-0.5 bg-github-text-primary shadow-[0_0_0_1px_rgba(0,0,0,0.45)]"
+          className="absolute top-0 bottom-0 w-0 border-l border-black"
+          data-testid="image-swipe-divider"
           style={{ left: `${swipePosition}%` }}
         >
           <div className="absolute left-1/2 top-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-github-border bg-github-bg-primary text-github-text-primary shadow">

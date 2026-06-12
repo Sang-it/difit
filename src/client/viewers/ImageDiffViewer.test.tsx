@@ -165,13 +165,28 @@ describe('ImageDiffViewer', () => {
       renderViewer(file);
       fireEvent.click(screen.getByRole('button', { name: 'Swipe' }));
 
-      expect(screen.getByTestId('image-swipe-comparison')).toBeInTheDocument();
-      expect(screen.getByLabelText('Swipe reveal amount')).toHaveValue('50');
+      const comparison = screen.getByTestId('image-swipe-comparison');
+      const overlay = screen.getByTestId('image-swipe-overlay');
+      const currentBorder = screen.getByTestId('image-swipe-current-border');
+      const previousBorder = screen.getByTestId('image-swipe-previous-border');
+      const divider = screen.getByTestId('image-swipe-divider');
+
+      expect(comparison).toBeInTheDocument();
+      expect(currentBorder).toHaveClass('inset-0', 'border-y-2', 'border-github-accent');
+      expect(currentBorder).not.toHaveClass('border-2');
+      expect(previousBorder).toHaveClass('inset-0', 'border-y-2', 'border-github-danger');
+      expect(previousBorder).not.toHaveClass('border-2');
+      expect(overlay).toHaveClass('inset-0');
+      expect(divider).toHaveClass('w-0', 'border-l', 'border-black');
+      expect(divider).not.toHaveClass('w-0.5', 'bg-github-text-primary');
+      expect(screen.getByLabelText('Swipe reveal amount')).toHaveValue('0');
+      expect(screen.queryByText('Previous')).not.toBeInTheDocument();
+      expect(screen.queryByText('Current')).not.toBeInTheDocument();
 
       const images = screen.getAllByRole('img');
       expect(images).toHaveLength(2);
-      expect(images[0]).toHaveAttribute('src', '/api/blob/test.jpg?ref=HEAD~1');
-      expect(images[1]).toHaveAttribute('src', '/api/blob/test.jpg?ref=HEAD');
+      expect(images[0]).toHaveAttribute('src', '/api/blob/test.jpg?ref=HEAD');
+      expect(images[1]).toHaveAttribute('src', '/api/blob/test.jpg?ref=HEAD~1');
     });
 
     it('updates the clipped overlay when the swipe slider changes', () => {
@@ -211,8 +226,8 @@ describe('ImageDiffViewer', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Swipe' }));
 
       const images = screen.getAllByRole('img');
-      expect(images[0]).toHaveAttribute('src', '/api/blob/vector.svg?ref=main');
-      expect(images[1]).toHaveAttribute('src', '/api/blob/vector.svg?ref=feature');
+      expect(images[0]).toHaveAttribute('src', '/api/blob/vector.svg?ref=feature');
+      expect(images[1]).toHaveAttribute('src', '/api/blob/vector.svg?ref=main');
     });
   });
 
