@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom';
 
@@ -39,6 +39,7 @@ describe('FileList', () => {
         comments={[]}
         reviewedFiles={new Set()}
         onToggleReviewed={vi.fn()}
+        onToggleDirectoryReviewed={vi.fn()}
         selectedFileIndex={null}
       />,
     );
@@ -60,6 +61,7 @@ describe('FileList', () => {
       onScrollToFile: vi.fn(),
       comments: [],
       onToggleReviewed: vi.fn(),
+      onToggleDirectoryReviewed: vi.fn(),
       selectedFileIndex: null,
     };
     const { rerender } = render(
@@ -86,5 +88,34 @@ describe('FileList', () => {
     expect(getTreeRow('cli')).toHaveClass('opacity-70');
     expect(getLabel('client')).toHaveClass('line-through');
     expect(getTreeRow('client')).toHaveClass('opacity-70');
+  });
+
+  it('toggles all descendant files when a directory checkbox is clicked', () => {
+    const onToggleDirectoryReviewed = vi.fn();
+    render(
+      <FileList
+        files={[
+          createFile('src/cli/index.ts'),
+          createFile('src/client/App.tsx'),
+          createFile('README.md'),
+        ]}
+        onScrollToFile={vi.fn()}
+        comments={[]}
+        reviewedFiles={new Set()}
+        onToggleReviewed={vi.fn()}
+        onToggleDirectoryReviewed={onToggleDirectoryReviewed}
+        selectedFileIndex={null}
+      />,
+    );
+
+    const srcCheckbox = getTreeRow('src').querySelector('[role="checkbox"]');
+    expect(srcCheckbox).not.toBeNull();
+    fireEvent.click(srcCheckbox as HTMLElement);
+
+    expect(onToggleDirectoryReviewed).toHaveBeenCalledTimes(1);
+    expect(onToggleDirectoryReviewed.mock.calls[0]?.[0].map((file: DiffFile) => file.path)).toEqual(
+      ['src/cli/index.ts', 'src/client/App.tsx'],
+    );
+    expect(onToggleDirectoryReviewed).toHaveBeenCalledWith(expect.any(Array), true);
   });
 });

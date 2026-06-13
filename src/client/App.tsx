@@ -7,6 +7,7 @@ import {
   type DiffSelection,
   type DiffViewMode,
   type DiffSide,
+  type DiffFile,
   type LineNumber,
   type CommentThread,
   type RevisionsResponse,
@@ -299,6 +300,7 @@ function App() {
     changedSinceViewedFiles,
     hasLoadedInitialViewedFiles,
     toggleFileViewed,
+    setFilesViewed,
     clearViewedFiles,
   } = useViewedFiles(
     resolvedSelection?.baseCommitish,
@@ -366,6 +368,27 @@ function App() {
       }
     },
     [diffData, scrollFileIntoDiffContainer, toggleFileViewed, viewedFiles],
+  );
+
+  const toggleDirectoryReviewed = useCallback(
+    async (files: DiffFile[], shouldReview: boolean) => {
+      if (!diffData || files.length === 0) return;
+
+      await setFilesViewed(files, shouldReview);
+
+      setCollapsedFiles((prev) => {
+        const newSet = new Set(prev);
+        for (const file of files) {
+          if (shouldReview) {
+            newSet.add(file.path);
+          } else {
+            newSet.delete(file.path);
+          }
+        }
+        return newSet;
+      });
+    },
+    [diffData, setFilesViewed],
   );
 
   const toggleFileCollapsed = useCallback((filePath: string) => {
@@ -1290,6 +1313,7 @@ function App() {
                   comments={normalizedThreads}
                   reviewedFiles={viewedFiles}
                   onToggleReviewed={toggleFileReviewed}
+                  onToggleDirectoryReviewed={toggleDirectoryReviewed}
                   selectedFileIndex={cursor?.fileIndex ?? null}
                 />
               </div>

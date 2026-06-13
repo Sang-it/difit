@@ -26,6 +26,7 @@ interface FileListProps {
   comments: CommentThread[];
   reviewedFiles: Set<string>;
   onToggleReviewed: (path: string) => void;
+  onToggleDirectoryReviewed: (files: DiffFile[], shouldReview: boolean) => void;
   selectedFileIndex: number | null;
 }
 
@@ -78,6 +79,30 @@ function getReviewedDirectoryPaths(node: TreeNode, reviewedFiles: Set<string>): 
 
   visit(node);
   return reviewedDirectoryPaths;
+}
+
+function getDescendantFiles(node: TreeNode): DiffFile[] {
+  if (node.file) return [node.file];
+  if (!node.children) return [];
+  return node.children.flatMap((child) => getDescendantFiles(child));
+}
+
+function getDirectoryFilesMap(node: TreeNode): Map<string, DiffFile[]> {
+  const directoryFilesMap = new Map<string, DiffFile[]>();
+
+  const visit = (currentNode: TreeNode): DiffFile[] => {
+    if (currentNode.file) return [currentNode.file];
+    if (!currentNode.children) return [];
+
+    const descendantFiles = currentNode.children.flatMap((child) => visit(child));
+    if (currentNode.path) {
+      directoryFilesMap.set(currentNode.path, descendantFiles);
+    }
+    return descendantFiles;
+  };
+
+  visit(node);
+  return directoryFilesMap;
 }
 
 function buildFileTree(files: DiffFile[]): TreeNode {
@@ -159,6 +184,7 @@ export const FileList = memo(function FileList({
   comments,
   reviewedFiles,
   onToggleReviewed,
+  onToggleDirectoryReviewed,
   selectedFileIndex,
 }: FileListProps) {
   const fileTree = useMemo(() => buildFileTree(files), [files]);
@@ -208,6 +234,7 @@ export const FileList = memo(function FileList({
     () => getReviewedDirectoryPaths(fileTree, reviewedFiles),
     [fileTree, reviewedFiles],
   );
+  const directoryFilesMap = useMemo(() => getDirectoryFilesMap(fileTree), [fileTree]);
 
   // Filter the file tree based on search text
   const filteredFileTree = useMemo(() => {
@@ -328,6 +355,7 @@ export const FileList = memo(function FileList({
     if (node.isDirectory && node.children) {
       const isExpanded = expandedDirs.has(node.path);
       const isReviewed = reviewedDirectoryPaths.has(node.path);
+      const directoryFiles = directoryFilesMap.get(node.path) ?? getDescendantFiles(node);
 
       return (
         <div
@@ -359,6 +387,14 @@ export const FileList = memo(function FileList({
               }}
               onClick={(event) => handleDirectoryClick(event, node.path)}
             >
+              <Checkbox
+                checked={isReviewed}
+                onChange={(checked) => {
+                  onToggleDirectoryReviewed(directoryFiles, checked);
+                }}
+                title={isReviewed ? 'Mark folder as not reviewed' : 'Mark folder as reviewed'}
+                className="z-10"
+              />
               {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
               {isExpanded ? (
                 <FolderOpen size={16} className="text-github-text-secondary" />

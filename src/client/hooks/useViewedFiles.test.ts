@@ -261,6 +261,65 @@ describe('useViewedFiles', () => {
     });
   });
 
+  describe('setFilesViewed', () => {
+    it('should mark multiple files as viewed', async () => {
+      const files = [
+        createMockDiffFile('src/app.ts', 'modified'),
+        createMockDiffFile('src/util.ts', 'modified'),
+      ];
+      const { result } = renderHook(() => useViewedFiles('main', 'feature-branch'));
+
+      await act(async () => {
+        await result.current.setFilesViewed(files, true);
+      });
+
+      expect(result.current.viewedFiles.has('src/app.ts')).toBe(true);
+      expect(result.current.viewedFiles.has('src/util.ts')).toBe(true);
+
+      const savedRecords = mockSaveViewedFiles.mock.calls.at(-1)?.[2] as
+        | ViewedFileRecord[]
+        | undefined;
+      expect(savedRecords?.map((record) => record.filePath)).toEqual(['src/app.ts', 'src/util.ts']);
+      expect(mockRecordViewedHashes).toHaveBeenCalledWith(
+        undefined,
+        expect.arrayContaining([
+          expect.objectContaining({ filePath: 'src/app.ts', hashVersion: 1 }),
+          expect.objectContaining({ filePath: 'src/util.ts', hashVersion: 1 }),
+        ]),
+      );
+    });
+
+    it('should mark multiple files as not viewed', async () => {
+      const storedRecords: ViewedFileRecord[] = [
+        { filePath: 'src/app.ts', viewedAt: '2024-01-01T00:00:00Z', diffContentHash: 'hash1' },
+        { filePath: 'src/util.ts', viewedAt: '2024-01-01T00:00:00Z', diffContentHash: 'hash2' },
+        { filePath: 'README.md', viewedAt: '2024-01-01T00:00:00Z', diffContentHash: 'hash3' },
+      ];
+      mockGetViewedFiles.mockReturnValue(storedRecords);
+
+      const { result } = renderHook(() => useViewedFiles('main', 'feature-branch'));
+
+      await waitFor(() => {
+        expect(result.current.viewedFiles.size).toBe(3);
+      });
+
+      await act(async () => {
+        await result.current.setFilesViewed(
+          [createMockDiffFile('src/app.ts'), createMockDiffFile('src/util.ts')],
+          false,
+        );
+      });
+
+      expect(result.current.viewedFiles.has('src/app.ts')).toBe(false);
+      expect(result.current.viewedFiles.has('src/util.ts')).toBe(false);
+      expect(result.current.viewedFiles.has('README.md')).toBe(true);
+      expect(mockRemoveViewedHashes).toHaveBeenCalledWith(undefined, [
+        { filePath: 'src/app.ts', diffContentHash: 'hash1' },
+        { filePath: 'src/util.ts', diffContentHash: 'hash2' },
+      ]);
+    });
+  });
+
   describe('getViewedFileRecord', () => {
     it('should return record for viewed file', async () => {
       const storedRecords: ViewedFileRecord[] = [
