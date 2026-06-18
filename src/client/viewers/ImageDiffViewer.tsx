@@ -1,7 +1,9 @@
-import { Columns2, MoveHorizontal, Rows2 } from 'lucide-react';
+import { Columns2, MessageSquare, MoveHorizontal, Rows2 } from 'lucide-react';
 import { useEffect, useState, type CSSProperties } from 'react';
 
 import { DEFAULT_DIFF_VIEW_MODE } from '../../utils/diffMode';
+import { CommentForm } from '../components/CommentForm';
+import { CommentThreadCard } from '../components/CommentThreadCard';
 
 import type { DiffViewerBodyProps } from './types';
 
@@ -281,11 +283,112 @@ const renderImageCompare = (
   }
 };
 
+type ImageCommentSectionProps = Pick<
+  DiffViewerBodyProps,
+  | 'file'
+  | 'threads'
+  | 'showAuthorBadges'
+  | 'syntaxTheme'
+  | 'onAddComment'
+  | 'onGenerateThreadPrompt'
+  | 'onRemoveThread'
+  | 'onReplyToThread'
+  | 'onRemoveMessage'
+  | 'onUpdateMessage'
+>;
+
+const IMAGE_COMMENT_LINE = 0;
+
+const ImageCommentSection = ({
+  file,
+  threads,
+  showAuthorBadges,
+  syntaxTheme,
+  onAddComment,
+  onGenerateThreadPrompt,
+  onRemoveThread,
+  onReplyToThread,
+  onRemoveMessage,
+  onUpdateMessage,
+}: ImageCommentSectionProps) => {
+  const [isCommenting, setIsCommenting] = useState(false);
+  const imageThreads = threads
+    .filter((thread) => thread.line === IMAGE_COMMENT_LINE)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+
+  const handleSubmit = async (body: string) => {
+    await onAddComment(IMAGE_COMMENT_LINE, body, undefined, 'new');
+    setIsCommenting(false);
+  };
+
+  return (
+    <div className="mt-4 space-y-3">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => setIsCommenting((value) => !value)}
+          className="inline-flex items-center gap-2 rounded border px-3 py-1.5 text-xs font-medium transition-all"
+          style={{
+            backgroundColor: 'var(--color-yellow-btn-bg)',
+            color: 'var(--color-yellow-btn-text)',
+            borderColor: 'var(--color-yellow-btn-border)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = 'var(--color-yellow-btn-hover-bg)';
+            e.currentTarget.style.borderColor = 'var(--color-yellow-btn-hover-border)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'var(--color-yellow-btn-bg)';
+            e.currentTarget.style.borderColor = 'var(--color-yellow-btn-border)';
+          }}
+        >
+          <MessageSquare size={14} />
+          Comment on image
+        </button>
+      </div>
+
+      {imageThreads.map((thread) => (
+        <CommentThreadCard
+          key={thread.id}
+          thread={thread}
+          showAuthorBadges={showAuthorBadges}
+          onGeneratePrompt={onGenerateThreadPrompt}
+          onRemoveThread={onRemoveThread}
+          onReplyToThread={onReplyToThread}
+          onRemoveMessage={onRemoveMessage}
+          onUpdateMessage={onUpdateMessage}
+          syntaxTheme={syntaxTheme}
+        />
+      ))}
+
+      {isCommenting && (
+        <CommentForm
+          onSubmit={handleSubmit}
+          onCancel={() => setIsCommenting(false)}
+          filename={file.path}
+          syntaxTheme={syntaxTheme}
+          title="Comment on image"
+          placeholder="Leave a comment on this image..."
+        />
+      )}
+    </div>
+  );
+};
+
 export function ImageDiffViewer({
   file,
+  threads,
+  showAuthorBadges,
   diffMode,
+  syntaxTheme,
   baseCommitish,
   targetCommitish,
+  onAddComment,
+  onGenerateThreadPrompt,
+  onRemoveThread,
+  onReplyToThread,
+  onRemoveMessage,
+  onUpdateMessage,
 }: DiffViewerBodyProps) {
   const mode = diffMode ?? DEFAULT_DIFF_VIEW_MODE;
   const [compareMode, setCompareMode] = useState<ImageCompareMode>(() =>
@@ -299,6 +402,20 @@ export function ImageDiffViewer({
   const targetRef = targetCommitish || 'HEAD';
   const [oldImageInfo, setOldImageInfo] = useState<ImageInfo>({});
   const [newImageInfo, setNewImageInfo] = useState<ImageInfo>({});
+  const commentSection = (
+    <ImageCommentSection
+      file={file}
+      threads={threads}
+      showAuthorBadges={showAuthorBadges}
+      syntaxTheme={syntaxTheme}
+      onAddComment={onAddComment}
+      onGenerateThreadPrompt={onGenerateThreadPrompt}
+      onRemoveThread={onRemoveThread}
+      onReplyToThread={onReplyToThread}
+      onRemoveMessage={onRemoveMessage}
+      onUpdateMessage={onUpdateMessage}
+    />
+  );
 
   useEffect(() => {
     setCompareMode(getDefaultCompareMode(mode));
@@ -321,6 +438,7 @@ export function ImageDiffViewer({
           </div>
           <ImageCard image={previousImage} className="inline-block" />
         </div>
+        {commentSection}
       </div>
     );
   }
@@ -342,6 +460,7 @@ export function ImageDiffViewer({
           </div>
           <ImageCard image={newImage} className="inline-block" />
         </div>
+        {commentSection}
       </div>
     );
   }
@@ -369,6 +488,7 @@ export function ImageDiffViewer({
           <ImageCompareModeControl mode={compareMode} onModeChange={setCompareMode} />
         </div>
         {renderImageCompare(compareMode, previousImage, currentImage)}
+        {commentSection}
       </div>
     );
   }

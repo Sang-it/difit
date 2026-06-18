@@ -676,6 +676,11 @@ function App() {
         setDiffData(data);
         setDiffDataVersion((prev) => prev + 1);
 
+        // Title = repo path so multiple difit tabs are easy to tell apart.
+        if (data.repositoryPath) {
+          document.title = `${data.repositoryPath} - difit`;
+        }
+
         // Update resolved revision state from server response
         setResolvedBaseRevision(
           data.baseCommitish && data.requestedBaseMode !== 'merge-base' ? data.baseCommitish : '',
@@ -990,6 +995,11 @@ function App() {
     const position = findCommentPosition(thread, diffData.files);
     if (position) {
       setCursorPosition(position);
+      return;
+    }
+
+    if (thread.line === 0) {
+      document.getElementById(getFileElementId(thread.file))?.scrollIntoView({ block: 'start' });
     }
   };
 

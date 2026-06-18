@@ -3,6 +3,9 @@ import type { Comment, CommentThread } from '../types/diff';
 import { hasSuggestionBlock, parseSuggestionBlocks } from './suggestionUtils.js';
 
 function getLineInfo(line: number | number[]): string {
+  if (line === 0 || (Array.isArray(line) && line[0] === 0 && line[1] === 0)) {
+    return 'image';
+  }
   return typeof line === 'number' ? `L${line}` : `L${line[0]}-L${line[1]}`;
 }
 

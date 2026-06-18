@@ -21,6 +21,12 @@ import {
   readStdin,
 } from './utils.js';
 import { createCommentCommand } from './comment.js';
+import {
+  createStartCommand,
+  createListCommand,
+  createStopCommand,
+  createKillServerCommand,
+} from './instances.js';
 import { getPrPatch, getPrCommentImports } from './github.js';
 
 type SpecialArg = 'working' | 'staged' | '.';
@@ -179,6 +185,10 @@ program
   .version(pkg.version, '-v, --version', 'output the version number')
   .enablePositionalOptions()
   .addCommand(createCommentCommand())
+  .addCommand(createStartCommand())
+  .addCommand(createListCommand())
+  .addCommand(createStopCommand())
+  .addCommand(createKillServerCommand())
   .argument(
     '[commit-ish]',
     'Git commit, tag, branch, HEAD~n reference, or "working"/"staged"/"."',

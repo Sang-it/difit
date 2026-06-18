@@ -353,6 +353,7 @@ export async function startServer(
       requestedBaseMode,
       clearComments: options.clearComments,
       repositoryId,
+      repositoryPath,
       commentImports: shouldIncludeCommentImports ? initialCommentImports : undefined,
       commentImportId: shouldIncludeCommentImports ? commentImportId : undefined,
     });

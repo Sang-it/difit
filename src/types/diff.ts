@@ -59,6 +59,7 @@ export interface DiffResponse {
   requestedBaseMode?: BaseMode;
   clearComments?: boolean;
   repositoryId?: string;
+  repositoryPath?: string;
   commentImports?: CommentImport[];
   commentImportId?: string;
 }

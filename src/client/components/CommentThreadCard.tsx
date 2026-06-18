@@ -154,8 +154,12 @@ export function CommentThreadCard({
   const [isCopied, setIsCopied] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
   const lineLabel = Array.isArray(thread.line)
-    ? `${thread.line[0]}-${thread.line[1]}`
-    : thread.line;
+    ? thread.line[0] === 0 && thread.line[1] === 0
+      ? 'image'
+      : `${thread.line[0]}-${thread.line[1]}`
+    : thread.line === 0
+      ? 'image'
+      : thread.line;
 
   const handleCopyThread = async (e: React.MouseEvent) => {
     e.stopPropagation();

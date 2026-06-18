@@ -318,4 +318,64 @@ describe('ImageDiffViewer', () => {
       });
     });
   });
+
+  describe('Image comments', () => {
+    it('adds a file-level image comment', async () => {
+      const onAddComment = vi.fn().mockResolvedValue(undefined);
+      const file: DiffFile = {
+        path: 'test.jpg',
+        status: 'added',
+        additions: 1,
+        deletions: 0,
+        chunks: [],
+      };
+
+      renderViewer(file, { onAddComment });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Comment on image' }));
+      fireEvent.change(screen.getByPlaceholderText('Leave a comment on this image...'), {
+        target: { value: 'The crop looks off.' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+
+      await waitFor(() => {
+        expect(onAddComment).toHaveBeenCalledWith(0, 'The crop looks off.', undefined, 'new');
+      });
+    });
+
+    it('renders existing image comments with an image location label', () => {
+      const file: DiffFile = {
+        path: 'test.jpg',
+        status: 'added',
+        additions: 1,
+        deletions: 0,
+        chunks: [],
+      };
+
+      renderViewer(file, {
+        threads: [
+          {
+            id: 'thread-1',
+            file: 'test.jpg',
+            line: 0,
+            side: 'new',
+            createdAt: '2024-01-01T00:00:00Z',
+            updatedAt: '2024-01-01T00:00:00Z',
+            messages: [
+              {
+                id: 'thread-1',
+                body: 'This image needs another pass.',
+                author: 'User',
+                createdAt: '2024-01-01T00:00:00Z',
+                updatedAt: '2024-01-01T00:00:00Z',
+              },
+            ],
+          },
+        ],
+      });
+
+      expect(screen.getByText('test.jpg:image')).toBeInTheDocument();
+      expect(screen.getByText('This image needs another pass.')).toBeInTheDocument();
+    });
+  });
 });

@@ -40,6 +40,11 @@ describe('commentFormatting', () => {
       expect(result).toBe('<unknown file>:L10\nComment body');
     });
 
+    it('should format image comments without a fake line number', () => {
+      const result = formatCommentPrompt('public/logo.png', 0, 'Adjust contrast');
+      expect(result).toBe('public/logo.png:image\nAdjust contrast');
+    });
+
     it('should format suggestion block with ORIGINAL/SUGGESTED structure', () => {
       const body = `\`\`\`suggestion
 const newCode = 42;
