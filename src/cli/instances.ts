@@ -1,8 +1,9 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { closeSync, openSync, readFileSync } from 'node:fs';
-import { basename } from 'node:path';
+import { basename, resolve } from 'node:path';
 
 import { Command } from 'commander';
+import open from 'open';
 
 import {
   findByName,
@@ -26,6 +27,15 @@ interface StartOptions {
   port?: number;
   host?: string;
   context?: number;
+}
+
+/**
+ * An instance name must not be path-like. We reserve "." and "/" (and "\\")
+ * so `difit open <name/path>` can tell a registry name apart from a filesystem
+ * path without ambiguity.
+ */
+function isPathLike(value: string): boolean {
+  return value.includes('.') || value.includes('/') || value.includes('\\');
 }
 
 // ANSI helpers
@@ -225,7 +235,16 @@ export function createStartCommand(): Command {
             process.exit(1);
           }
 
-          const instanceName = name ?? basename(repoPath);
+          if (name !== undefined && isPathLike(name)) {
+            console.error(
+              `Error: Instance name "${name}" cannot contain "." or "/". Pick a path-free name.`,
+            );
+            process.exit(1);
+          }
+
+          // Default name is the repo dir; strip any reserved chars so it stays
+          // a valid (non-path-like) registry name.
+          const instanceName = name ?? basename(repoPath).replace(/[./\\]/gu, '_');
 
           const live = loadLiveRegistry();
           const byName = findByName(live, instanceName);
@@ -324,6 +343,36 @@ export function createStopCommand(): Command {
       }
       writeRegistry(live.filter((e) => e.name !== entry.name));
       console.log(`${c.yellow}🛑 Stopped "${entry.name}".${c.reset}`);
+    });
+}
+
+export function createOpenCommand(): Command {
+  return new Command('open')
+    .description('Open the webpage of a running difit instance by name or repo path')
+    .argument('<name-or-path>', 'instance name, or a path inside the repo to open')
+    .action(async (target: string) => {
+      const live = loadLiveRegistry();
+
+      // A name is never path-like; a path always is. Resolve accordingly,
+      // but fall back to the other lookup so either form still works.
+      let entry = isPathLike(target) ? undefined : findByName(live, target);
+      if (!entry) {
+        const absPath = resolve(target);
+        entry = live.find((e) => e.repoPath === absPath);
+      }
+
+      if (!entry) {
+        console.error(
+          `Error: No running instance with name or path "${target}". ` +
+            'Run `difit list` to see running instances.',
+        );
+        process.exit(1);
+      }
+
+      await open(entry.url);
+      console.log(
+        `${c.green}🌐 Opening "${entry.name}"${c.reset} → ${c.blue}${c.underline}${entry.url}${c.reset}`,
+      );
     });
 }
 

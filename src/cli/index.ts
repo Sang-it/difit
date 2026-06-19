@@ -26,6 +26,7 @@ import {
   createListCommand,
   createStopCommand,
   createKillServerCommand,
+  createOpenCommand,
 } from './instances.js';
 import { getPrPatch, getPrCommentImports } from './github.js';
 
@@ -189,6 +190,7 @@ program
   .addCommand(createListCommand())
   .addCommand(createStopCommand())
   .addCommand(createKillServerCommand())
+  .addCommand(createOpenCommand())
   .argument(
     '[commit-ish]',
     'Git commit, tag, branch, HEAD~n reference, or "working"/"staged"/"."',
