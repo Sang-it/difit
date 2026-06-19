@@ -318,9 +318,25 @@ export function createListCommand(): Command {
 export function createStopCommand(): Command {
   return new Command('stop')
     .description('Stop a running difit background instance by name or pid')
-    .argument('<name-or-pid>', 'instance name or pid to stop')
-    .action((target: string) => {
+    .argument('[name-or-pid]', 'instance name or pid to stop (defaults to the current repo)')
+    .action((target: string | undefined) => {
       const live = loadLiveRegistry();
+
+      // No target: stop the instance for the current repo.
+      if (target === undefined) {
+        const repoPath = resolveCurrentRepoPath();
+        const entry = live.find((e) => e.repoPath === repoPath);
+        if (!entry) {
+          console.error(
+            `Error: No running instance for the current repo (${repoPath}). ` +
+              'Run `difit list` to see running instances.',
+          );
+          process.exit(1);
+        }
+        stopEntry(live, entry);
+        return;
+      }
+
       // Match by name first; fall back to pid (numeric target).
       const entry =
         findByName(live, target) ??
@@ -329,44 +345,70 @@ export function createStopCommand(): Command {
         console.error(`Error: No running instance with name or pid "${target}".`);
         process.exit(1);
       }
-      try {
-        process.kill(entry.pid, 'SIGTERM');
-      } catch (error) {
-        // ESRCH = already dead; anything else we surface but still de-register.
-        if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
-          console.error(
-            `Warning: failed to signal pid ${entry.pid}: ${
-              error instanceof Error ? error.message : 'unknown error'
-            }`,
-          );
-        }
-      }
-      writeRegistry(live.filter((e) => e.name !== entry.name));
-      console.log(`${c.yellow}🛑 Stopped "${entry.name}".${c.reset}`);
+      stopEntry(live, entry);
     });
+}
+
+function resolveCurrentRepoPath(): string {
+  try {
+    return getGitRoot();
+  } catch {
+    return resolve('.');
+  }
+}
+
+function stopEntry(live: InstanceEntry[], entry: InstanceEntry): void {
+  try {
+    process.kill(entry.pid, 'SIGTERM');
+  } catch (error) {
+    // ESRCH = already dead; anything else we surface but still de-register.
+    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
+      console.error(
+        `Warning: failed to signal pid ${entry.pid}: ${
+          error instanceof Error ? error.message : 'unknown error'
+        }`,
+      );
+    }
+  }
+  writeRegistry(live.filter((e) => e.name !== entry.name));
+  console.log(`${c.yellow}🛑 Stopped "${entry.name}".${c.reset}`);
 }
 
 export function createOpenCommand(): Command {
   return new Command('open')
     .description('Open the webpage of a running difit instance by name or repo path')
-    .argument('<name-or-path>', 'instance name, or a path inside the repo to open')
-    .action(async (target: string) => {
+    .argument('[name-or-path]', 'instance name or repo path to open (defaults to the current repo)')
+    .action(async (target: string | undefined) => {
       const live = loadLiveRegistry();
 
-      // A name is never path-like; a path always is. Resolve accordingly,
-      // but fall back to the other lookup so either form still works.
-      let entry = isPathLike(target) ? undefined : findByName(live, target);
-      if (!entry) {
-        const absPath = resolve(target);
-        entry = live.find((e) => e.repoPath === absPath);
-      }
+      let entry: InstanceEntry | undefined;
+      if (target === undefined) {
+        // No target: open the instance for the current repo.
+        const repoPath = resolveCurrentRepoPath();
+        entry = live.find((e) => e.repoPath === repoPath);
+        if (!entry) {
+          console.error(
+            `Error: No running instance for the current repo (${repoPath}). ` +
+              'Run `difit list` to see running instances.',
+          );
+          process.exit(1);
+        }
+      } else {
+        // A name is never path-like; a path always is. Resolve accordingly,
+        // but fall back to the other lookup so either form still works.
+        entry = isPathLike(target) ? undefined : findByName(live, target);
+        if (!entry) {
+          const absPath = resolve(target);
+          entry = live.find((e) => e.repoPath === absPath);
+        }
 
-      if (!entry) {
-        console.error(
-          `Error: No running instance with name or path "${target}". ` +
-            'Run `difit list` to see running instances.',
-        );
-        process.exit(1);
+        if (!entry) {
+          console.error(
+            `Error: No running instance with name or path "${target}". ` +
+              'Run `difit list` to see running instances.',
+          );
+          process.exit(1);
+        }
       }
 
       await open(entry.url);
