@@ -205,18 +205,24 @@ const SwipeImageCompare = ({ previous, current }: ImagePairProps) => {
         style={{ ...checkerboardStyle, aspectRatio }}
       >
         {!currentHasError && (
-          <img
-            src={current.src}
-            alt={current.alt}
-            className="absolute inset-0 h-full w-full object-contain"
-            onLoad={(e) => void handleImageLoad(e.currentTarget, current.onImageInfo)}
-            onError={() => setCurrentHasError(true)}
-          />
+          <div
+            className="absolute inset-0 overflow-hidden"
+            data-testid="image-swipe-current"
+            style={{ clipPath: `inset(0 0 0 ${swipePosition}%)` }}
+          >
+            <img
+              src={current.src}
+              alt={current.alt}
+              className="absolute inset-0 h-full w-full object-contain"
+              onLoad={(e) => void handleImageLoad(e.currentTarget, current.onImageInfo)}
+              onError={() => setCurrentHasError(true)}
+            />
+            <div
+              className="pointer-events-none absolute inset-0 border-y-2 border-github-accent"
+              data-testid="image-swipe-current-border"
+            />
+          </div>
         )}
-        <div
-          className="pointer-events-none absolute inset-0 border-y-2 border-github-accent"
-          data-testid="image-swipe-current-border"
-        />
         {!previousHasError && (
           <div
             className="absolute inset-0 overflow-hidden"

@@ -166,17 +166,27 @@ describe('ImageDiffViewer', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Swipe' }));
 
       const comparison = screen.getByTestId('image-swipe-comparison');
+      const current = screen.getByTestId('image-swipe-current');
       const overlay = screen.getByTestId('image-swipe-overlay');
       const currentBorder = screen.getByTestId('image-swipe-current-border');
       const previousBorder = screen.getByTestId('image-swipe-previous-border');
       const divider = screen.getByTestId('image-swipe-divider');
 
       expect(comparison).toBeInTheDocument();
+      expect(current).toHaveClass('inset-0', 'overflow-hidden');
+      expect(current).toHaveAttribute(
+        'style',
+        expect.stringContaining('clip-path: inset(0 0 0 0%)'),
+      );
       expect(currentBorder).toHaveClass('inset-0', 'border-y-2', 'border-github-accent');
       expect(currentBorder).not.toHaveClass('border-2');
       expect(previousBorder).toHaveClass('inset-0', 'border-y-2', 'border-github-danger');
       expect(previousBorder).not.toHaveClass('border-2');
       expect(overlay).toHaveClass('inset-0');
+      expect(overlay).toHaveAttribute(
+        'style',
+        expect.stringContaining('clip-path: inset(0 100% 0 0)'),
+      );
       expect(divider).toHaveClass('w-0', 'border-l', 'border-black');
       expect(divider).not.toHaveClass('w-0.5', 'bg-github-text-primary');
       expect(screen.getByLabelText('Swipe reveal amount')).toHaveValue('0');
@@ -209,6 +219,10 @@ describe('ImageDiffViewer', () => {
       expect(screen.getByTestId('image-swipe-overlay')).toHaveAttribute(
         'style',
         expect.stringContaining('clip-path: inset(0 30% 0 0)'),
+      );
+      expect(screen.getByTestId('image-swipe-current')).toHaveAttribute(
+        'style',
+        expect.stringContaining('clip-path: inset(0 0 0 70%)'),
       );
     });
 
