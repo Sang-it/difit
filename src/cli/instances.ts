@@ -27,6 +27,16 @@ interface StartOptions {
   port?: number;
   host?: string;
   context?: number;
+  open?: boolean;
+}
+
+interface StartCommandDependencies {
+  spawnBackground?: typeof spawnBackground;
+  openUrl?: (url: string) => Promise<unknown>;
+  getGitRoot?: typeof getGitRoot;
+  loadLiveRegistry?: typeof loadLiveRegistry;
+  writeRegistry?: typeof writeRegistry;
+  logPathFor?: typeof logPathFor;
 }
 
 /**
@@ -210,7 +220,14 @@ function printList(entries: InstanceEntry[]): void {
   }
 }
 
-export function createStartCommand(): Command {
+export function createStartCommand(deps: StartCommandDependencies = {}): Command {
+  const spawnBackgroundFn = deps.spawnBackground ?? spawnBackground;
+  const openUrl = deps.openUrl ?? open;
+  const getGitRootFn = deps.getGitRoot ?? getGitRoot;
+  const loadLiveRegistryFn = deps.loadLiveRegistry ?? loadLiveRegistry;
+  const writeRegistryFn = deps.writeRegistry ?? writeRegistry;
+  const logPathForFn = deps.logPathFor ?? logPathFor;
+
   return new Command('start')
     .description('Start a difit server in the background for the current repo')
     .argument('[name]', 'instance name (defaults to the repo directory name)')
@@ -219,6 +236,7 @@ export function createStartCommand(): Command {
     .option('--port <port>', 'preferred port (auto-assigned if occupied)', parseInt)
     .option('--host <host>', 'host address to bind')
     .option('--context <lines>', 'number of context lines shown around each change', parseInt)
+    .option('--no-open', 'do not automatically open browser')
     .action(
       async (
         name: string | undefined,
@@ -229,10 +247,11 @@ export function createStartCommand(): Command {
         try {
           let repoPath: string;
           try {
-            repoPath = getGitRoot();
+            repoPath = getGitRootFn();
           } catch {
             console.error('Error: Not a git repository (or any of the parent directories)');
             process.exit(1);
+            return;
           }
 
           if (name !== undefined && isPathLike(name)) {
@@ -240,13 +259,14 @@ export function createStartCommand(): Command {
               `Error: Instance name "${name}" cannot contain "." or "/". Pick a path-free name.`,
             );
             process.exit(1);
+            return;
           }
 
           // Default name is the repo dir; strip any reserved chars so it stays
           // a valid (non-path-like) registry name.
           const instanceName = name ?? basename(repoPath).replace(/[./\\]/gu, '_');
 
-          const live = loadLiveRegistry();
+          const live = loadLiveRegistryFn();
           const byName = findByName(live, instanceName);
           if (byName) {
             console.error(
@@ -254,6 +274,7 @@ export function createStartCommand(): Command {
                 `Run \`difit stop ${instanceName}\` first.`,
             );
             process.exit(1);
+            return;
           }
 
           const byPath = live.find((e) => e.repoPath === repoPath);
@@ -263,6 +284,7 @@ export function createStartCommand(): Command {
                 `Run \`difit stop ${byPath.name}\` first.`,
             );
             process.exit(1);
+            return;
           }
 
           const childArgs = [commitish ?? 'working'];
@@ -280,7 +302,7 @@ export function createStartCommand(): Command {
             childArgs.push('--context', String(options.context));
           }
 
-          const info = await spawnBackground(childArgs, repoPath, logPathFor(instanceName));
+          const info = await spawnBackgroundFn(childArgs, repoPath, logPathForFn(instanceName));
 
           const entry: InstanceEntry = {
             name: instanceName,
@@ -291,8 +313,16 @@ export function createStartCommand(): Command {
             startedAt: new Date().toISOString(),
           };
           // Re-read to avoid clobbering instances started concurrently.
-          const current = loadLiveRegistry();
-          writeRegistry([...current.filter((e) => e.name !== instanceName), entry]);
+          const current = loadLiveRegistryFn();
+          writeRegistryFn([...current.filter((e) => e.name !== instanceName), entry]);
+
+          if (options.open !== false) {
+            try {
+              await openUrl(info.url);
+            } catch {
+              console.warn('Failed to open browser automatically');
+            }
+          }
 
           console.log(
             `${c.green}✅ Started "${instanceName}"${c.reset} → ${c.blue}${c.underline}${info.url}${c.reset}`,
