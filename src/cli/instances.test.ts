@@ -101,7 +101,7 @@ describe('instances commands', () => {
       expect(deps.openUrl).not.toHaveBeenCalled();
     });
 
-    it('does not open when the current repo already has a running instance', async () => {
+    it('opens the current repo instance when it is already running', async () => {
       const deps = createStartDeps([
         {
           name: 'review',
@@ -116,10 +116,33 @@ describe('instances commands', () => {
 
       await command.parseAsync(['custom'], { from: 'user' });
 
-      expect(process.exit).toHaveBeenCalledWith(1);
+      expect(process.exit).not.toHaveBeenCalled();
+      expect(deps.spawnBackground).not.toHaveBeenCalled();
+      expect(deps.writeRegistry).not.toHaveBeenCalled();
+      expect(deps.openUrl).toHaveBeenCalledWith('http://localhost:5000');
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('http://localhost:5000'));
+    });
+
+    it('prints the current repo instance URL without opening when --no-open is provided', async () => {
+      const deps = createStartDeps([
+        {
+          name: 'review',
+          repoPath: '/repos/difit',
+          url: 'http://localhost:5000',
+          port: 5000,
+          pid: 23456,
+          startedAt: '2026-07-02T00:00:00.000Z',
+        },
+      ]);
+      const command = createStartCommand(deps);
+
+      await command.parseAsync(['custom', '--no-open'], { from: 'user' });
+
+      expect(process.exit).not.toHaveBeenCalled();
       expect(deps.spawnBackground).not.toHaveBeenCalled();
       expect(deps.writeRegistry).not.toHaveBeenCalled();
       expect(deps.openUrl).not.toHaveBeenCalled();
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('http://localhost:5000'));
     });
   });
 });

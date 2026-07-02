@@ -267,21 +267,27 @@ export function createStartCommand(deps: StartCommandDependencies = {}): Command
           const instanceName = name ?? basename(repoPath).replace(/[./\\]/gu, '_');
 
           const live = loadLiveRegistryFn();
+          const byPath = live.find((e) => e.repoPath === repoPath);
+          if (byPath) {
+            if (options.open !== false) {
+              try {
+                await openUrl(byPath.url);
+              } catch {
+                console.warn('Failed to open browser automatically');
+              }
+            }
+
+            console.log(
+              `${c.green}🌐 Opening "${byPath.name}"${c.reset} → ${c.blue}${c.underline}${byPath.url}${c.reset}`,
+            );
+            return;
+          }
+
           const byName = findByName(live, instanceName);
           if (byName) {
             console.error(
               `Error: Instance "${instanceName}" already running at ${byName.url}. ` +
                 `Run \`difit stop ${instanceName}\` first.`,
-            );
-            process.exit(1);
-            return;
-          }
-
-          const byPath = live.find((e) => e.repoPath === repoPath);
-          if (byPath) {
-            console.error(
-              `Error: Repo already has a running instance "${byPath.name}" at ${byPath.url}. ` +
-                `Run \`difit stop ${byPath.name}\` first.`,
             );
             process.exit(1);
             return;
